@@ -246,10 +246,11 @@ class Kernel(Explainer):
             phi_var = np.zeros((self.data.groups_size, self.D))
             diff = self.link.f(self.fx) - self.link.f(self.fnull)
             for d in range(self.D):
-                phi[self.varyingInds[0],d] = diff[d]
+                phi[self.varyingInds[0], d] = diff[d]
 
         # if more than one feature varies then we have to do real work
         else:
+            self.zero_present = kwargs.get("zero_present", False)
             self.l1_reg = kwargs.get("l1_reg", "auto")
 
             # pick a reasonable number of samples if the user didn't specify how many they wanted
@@ -312,9 +313,11 @@ class Kernel(Explainer):
                     for inds in itertools.combinations(group_inds, subset_size):
                         mask[:] = 0.0
                         mask[np.array(inds, dtype='int64')] = 1.0
-                        self.addsample(instance.x, mask, w)
+                        present_w = 0. if self.zero_present else w
+                        self.addsample(instance.x, mask, present_w)
                         if subset_size <= num_paired_subset_sizes:
                             mask[:] = np.abs(mask - 1)
+                            # Use weight normally in inverted mask for all settings of zero_present:
                             self.addsample(instance.x, mask, w)
                 else:
                     break
@@ -349,7 +352,8 @@ class Kernel(Explainer):
                         new_sample = True
                         used_masks[mask_tuple] = self.nsamplesAdded
                         samples_left -= 1
-                        self.addsample(instance.x, mask, 1.0)
+                        present_w = 0. if self.zero_present else 1.0
+                        self.addsample(instance.x, mask, present_w)
                     else:
                         self.kernelWeights[used_masks[mask_tuple]] += 1.0
 
@@ -361,6 +365,7 @@ class Kernel(Explainer):
                         # increment a previous sample's weight
                         if new_sample:
                             samples_left -= 1
+                            # Use full weight in inverted mask for all settings of zero_present:
                             self.addsample(instance.x, mask, 1.0)
                         else:
                             # we know the compliment sample is the next one after the original sample, so + 1
